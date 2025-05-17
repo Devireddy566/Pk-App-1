@@ -20,13 +20,8 @@ on:
 env:
   SONAR_URL: ${{ secrets.SONAR_URL }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  # Smart branch detection for all scenarios
-  BRANCH_NAME: >-
-    ${{
-      github.event.pull_request.head.ref ||
-      github.head_ref ||
-      github.ref_name
-    }}
+  # Simplified branch detection that works for both manual and PR triggers
+  BRANCH_NAME: ${{ github.ref_name }}
   APP_REPO: ${{ github.repository }}
   APP_NAME: ${{ github.event.repository.name }}
   DOCKER_CACHE: ${{ github.workspace }}/.docker-cache
@@ -44,12 +39,10 @@ jobs:
       - name: Checkout Application Code
         uses: actions/checkout@v3
         with:
-          repository: ${{ env.APP_REPO }}
-          ref: ${{ env.BRANCH_NAME }}
           path: app
-          token: ${{ secrets.APP_REPO_TOKEN }}
           fetch-depth: 0
-
+          # Remove ref and repository to use current branch
+          
       - name: Secret Scan
         if: inputs.test_type == 'Unit Tests with Analysis'
         uses: gitleaks/gitleaks-action@v2
@@ -138,6 +131,13 @@ jobs:
             echo "✅ Passed: $SUCCESS" >> $GITHUB_STEP_SUMMARY
             echo "❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
             echo "📊 Total: $TOTAL" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Code Analysis Links
+          if [[ "${{ inputs.test_type }}" == "Unit Tests with Analysis" ]]; then
+            echo "### 🔍 Code Analysis" >> $GITHUB_STEP_SUMMARY
+            echo "- [View SonarQube Results](${{ env.SONAR_URL }}/dashboard?id=${{ env.APP_NAME }}-${{ env.BRANCH_NAME }})" >> $GITHUB_STEP_SUMMARY
+          fi
           fi
           
           # Code Analysis Links

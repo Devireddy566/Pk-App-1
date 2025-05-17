@@ -11,11 +11,6 @@ on:
           - Unit Tests
           - Unit Tests with Analysis
         default: 'Unit Tests'
-      feature_branch:
-        description: 'Feature branch to test'
-        required: false
-        type: string
-        default: ''
 
   pull_request:
     types: [opened, synchronize, reopened]
@@ -25,7 +20,13 @@ on:
 env:
   SONAR_URL: ${{ secrets.SONAR_URL }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  BRANCH_NAME: ${{ github.event.pull_request.head.ref || inputs.feature_branch || github.ref_name }}
+  # Smart branch detection for all scenarios
+  BRANCH_NAME: >-
+    ${{
+      github.event.pull_request.head.ref ||
+      github.head_ref ||
+      github.ref_name
+    }}
   APP_REPO: ${{ github.repository }}
   APP_NAME: ${{ github.event.repository.name }}
   DOCKER_CACHE: ${{ github.workspace }}/.docker-cache
@@ -144,5 +145,4 @@ jobs:
             echo "### 🔍 Code Analysis" >> $GITHUB_STEP_SUMMARY
             echo "- [View SonarQube Results](${{ env.SONAR_URL }}/dashboard?id=${{ env.APP_NAME }}-${{ env.BRANCH_NAME }})" >> $GITHUB_STEP_SUMMARY
           fi
-            echo "- [View SonarQube Results](${{ env.SONAR_URL }}/dashboard?id=${{ inputs.app_name }}-${{ inputs.feature_branch }})" >> $GITHUB_STEP_SUMMARY
           fi

@@ -2,6 +2,9 @@ name: Unit Testing Pipeline
 
 on:
   workflow_dispatch:
+    # Run on any branch
+    branches:
+      - '**'  # Matches any branch pattern
     inputs:
       test_type:
         description: 'Select test type'
@@ -11,7 +14,7 @@ on:
           - Unit Tests
           - Unit Tests with Analysis
         default: 'Unit Tests'
-  
+
   pull_request:
     types: [opened, synchronize, reopened]
     branches-ignore:
@@ -20,7 +23,7 @@ on:
 env:
   SONAR_URL: ${{ secrets.SONAR_URL }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  # Smart branch detection - uses the current branch context
+  # Use raw branch name without refs/heads/
   BRANCH_NAME: ${{ github.ref_name }}
   APP_REPO: ${{ github.repository }}
   APP_NAME: ${{ github.event.repository.name }}
@@ -30,6 +33,10 @@ jobs:
     name: Unit Testing
     runs-on: self-hosted
     steps:
+      - name: Display Current Branch
+        run: |
+          echo "Running tests on branch: ${{ env.BRANCH_NAME }}"
+
       - name: Checkout DevOps Pipeline
         uses: actions/checkout@v3
         with:

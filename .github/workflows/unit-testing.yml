@@ -31,7 +31,7 @@ env:
 jobs:
   unit-test:
     name: Unit Testing
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Display Current Branch
         run: |

@@ -1,5 +1,5 @@
 name: UNIT-TESTING
-description: Run unit tests for the project using Maven
+description: Run unit tests for the project using Maven.
 on:
   workflow_dispatch:
 

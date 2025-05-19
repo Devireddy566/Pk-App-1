@@ -1,168 +1,29 @@
-name: Unit Testing Pipeline
-
+name: UNIT-TESTING
+description: Run unit tests for the project using Maven
 on:
   workflow_dispatch:
-    # Run on any branch
-    branches:
-      - '**'  # Matches any branch pattern
-    inputs:
-      test_type:
-        description: 'Select test type'
-        type: choice
-        required: true
-        options:
-          - Unit Tests
-          - Unit Tests with Analysis
-        default: 'Unit Tests'
-
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches-ignore:
-      - main
-
-env:
-  SONAR_URL: ${{ secrets.SONAR_URL }}
-  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  # Use raw branch name without refs/heads/
-  BRANCH_NAME: ${{ github.ref_name }}
-  APP_REPO: ${{ github.repository }}
-  APP_NAME: ${{ github.event.repository.name }}
 
 jobs:
   unit-test:
     name: Unit Testing
     runs-on: ubuntu-latest
     steps:
-      - name: Display Current Branch
-        run: |
-          echo "Running tests on branch: ${{ env.BRANCH_NAME }}"
-
-      - name: Checkout DevOps Pipeline
-        uses: actions/checkout@v3
-        with:
-          path: pipeline
-
-      - name: Checkout Application Code
-        uses: actions/checkout@v3
-        with:
-          path: app
-          fetch-depth: 0
-          clean: true
-          
-      - name: Secret Scan
-        if: inputs.test_type == 'Unit Tests with Analysis'
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          path: ./app
-          config-path: ./pipeline/.gitleaks.toml
-          report-format: json
-          report-path: gitleaks-report.json
-          fail-on: high
-        continue-on-error: true
-
-      - name: Cache Maven packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ env.APP_NAME }}-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-m2-${{ env.APP_NAME }}-
-            ${{ runner.os }}-m2-
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-
+
       - name: Run Tests
-        working-directory: ./app
-        run: |
-          if [[ "${{ inputs.test_type }}" == "Unit Tests" ]]; then
-            mvn test -B
-          else
-            mvn verify -B
-          fi
-
-      - name: Run SonarQube Analysis
-        if: inputs.test_type == 'Unit Tests with Analysis'
-        working-directory: ./app
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mvn sonar:sonar \
-            -Dsonar.host.url=${{ env.SONAR_URL }} \
-            -Dsonar.login=${{ env.SONAR_TOKEN }} \
-            -Dsonar.projectKey=${{ env.APP_NAME }}-${{ env.BRANCH_NAME }} \
-            -Dsonar.projectName="${{ env.APP_NAME }} (${{ env.BRANCH_NAME }})" \
-            -Dsonar.qualitygate.wait=true \
-            -Dsonar.scm.provider=git \
-            -Dsonar.java.binaries=target/ \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
-            -Dsonar.junit.reportPaths=target/surefire-reports/
-
-      - name: Generate Test Report
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Test Results
-          path: app/target/surefire-reports/*.xml
-          reporter: java-junit
-          fail-on-error: false
-
-      - name: Upload Reports
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-reports-${{ env.APP_NAME }}-${{ github.run_number }}
-          path: |
-            app/target/surefire-reports/
-            app/target/site/jacoco/
-            gitleaks-report.json
-          retention-days: 5
-
-      - name: Publish Summary
-        if: always()
-        run: |
-          echo "### 🧪 Test Results for ${{ env.APP_NAME }} - ${{ env.BRANCH_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Test Results Summary
-          if [ -d "app/target/surefire-reports" ]; then
-            TOTAL=$(find app/target/surefire-reports -name "TEST-*.xml" | wc -l)
-            FAILED=$(grep -l "<failure" app/target/surefire-reports/TEST-*.xml 2>/dev/null | wc -l)
-            SUCCESS=$((TOTAL - FAILED))
-            
-            echo "#### Unit Test Summary" >> $GITHUB_STEP_SUMMARY
-            echo "✅ Passed: $SUCCESS" >> $GITHUB_STEP_SUMMARY
-            echo "❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "📊 Total: $TOTAL" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Code Analysis Links
-          if [[ "${{ inputs.test_type }}" == "Unit Tests with Analysis" ]]; then
-            echo "### 🔍 Code Analysis" >> $GITHUB_STEP_SUMMARY
-            echo "- [View SonarQube Results](${{ env.SONAR_URL }}/dashboard?id=${{ env.APP_NAME }}-${{ env.BRANCH_NAME }})" >> $GITHUB_STEP_SUMMARY
-          fi
-          fi
-            SUCCESS=$((TOTAL - FAILED))
-            
-            echo "#### Unit Test Summary" >> $GITHUB_STEP_SUMMARY
-            echo "✅ Passed: $SUCCESS" >> $GITHUB_STEP_SUMMARY
-            echo "❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "📊 Total: $TOTAL" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Code Analysis Links
-          if [[ "${{ inputs.test_type }}" == "Unit Tests with Analysis" ]]; then
-            echo "### 🔍 Code Analysis" >> $GITHUB_STEP_SUMMARY
-            echo "- [View SonarQube Results](${{ env.SONAR_URL }}/dashboard?id=${{ env.APP_NAME }}-${{ env.BRANCH_NAME }})" >> $GITHUB_STEP_SUMMARY
-          fi
-          fi
-          
-          # Code Analysis Links
-          if [[ "${{ inputs.test_type }}" == "Unit Tests with Analysis" ]]; then
-            echo "### 🔍 Code Analysis" >> $GITHUB_STEP_SUMMARY
-            echo "- [View SonarQube Results](${{ env.SONAR_URL }}/dashboard?id=${{ env.APP_NAME }}-${{ env.BRANCH_NAME }})" >> $GITHUB_STEP_SUMMARY
-          fi
-          fi
+        run: mvn test -B

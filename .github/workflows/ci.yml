@@ -1,0 +1,96 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  IMAGE_NAME: pk-app-1 # You can change this to your desired image name
+  GCR_REGISTRY_HOSTNAME: gcr.io # Or your regional Artifact Registry, e.g., us-central1-docker.pkg.dev
+
+jobs:
+  build_scan_push:
+    name: Build, Scan, and Push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required for checkout
+      # id-token: write # Uncomment if using Workload Identity Federation for GCR auth
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Optional: for reporting issues back to GitHub
+          # GITLEAKS_CONFIG: .gitleaks.toml # Optional: if you have a custom gitleaks config
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-
+
+      - name: Maven Build
+        run: mvn clean install -B -DskipTests # Builds the application, skips tests (assuming unit-testing.yml runs them)
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GCR
+        # This step is conditional and only runs on pushes to the main branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GCR_REGISTRY_HOSTNAME }}
+          username: _json_key
+          password: ${{ secrets.GCR_SA_KEY }}
+
+      - name: Build and tag Docker image
+        id: docker_build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile # Assumes Dockerfile is at the root
+          push: false # Do not push yet, will push in a later step if on main branch
+          load: true   # Load image into docker daemon for trivy to scan locally
+          tags: |
+            ${{ env.GCR_REGISTRY_HOSTNAME }}/${{ secrets.GCR_PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.GCR_REGISTRY_HOSTNAME }}/${{ secrets.GCR_PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ fromJson(steps.docker_build.outputs.metadata).createdAt }}
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master 
+        with:
+          image-ref: '${{ env.GCR_REGISTRY_HOSTNAME }}/${{ secrets.GCR_PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1' # Fail the build if vulnerabilities are found
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH' # Comma-separated list of severities to scan for
+
+      - name: Push Docker image to GCR
+        # This step is conditional and only runs on pushes to the main branch after successful scan
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: . # Still needed for the action to work
+          file: ./Dockerfile # Still needed
+          push: true # Actually push the image
+          tags: | # Must be the same tags as in the build step
+            ${{ env.GCR_REGISTRY_HOSTNAME }}/${{ secrets.GCR_PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.GCR_REGISTRY_HOSTNAME }}/${{ secrets.GCR_PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest

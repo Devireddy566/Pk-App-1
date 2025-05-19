@@ -56,6 +56,10 @@ jobs:
           username: _json_key
           password: ${{ secrets.GCP_SERVICE_ACCOUNT }} # Corrected secret name
 
+      - name: Get current date for OCI label
+        id: date
+        run: echo "timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
       - name: Build and tag Docker image
         id: docker_build
         uses: docker/build-push-action@v5
@@ -70,7 +74,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.repositoryUrl }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ fromJson(steps.docker_build.outputs.metadata).createdAt }}
+            org.opencontainers.image.created=${{ steps.date.outputs.timestamp }}
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@master 

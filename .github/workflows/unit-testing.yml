@@ -13,8 +13,9 @@ on:
           - 'false'
 
 jobs:
-  unit-test:
-    name: Unit Testing
+  # STAGE 1: Setup and Validation
+  setup:
+    name: Environment Setup
     runs-on: self-hosted
     steps:
       - name: Checkout code
@@ -34,6 +35,21 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+  # STAGE 2: Unit Tests
+  unit-test:
+    needs: setup
+    name: Run Unit Tests
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
@@ -44,7 +60,50 @@ jobs:
 
       - name: Run Tests
         run: mvn test -B ${{ github.event.inputs.debug == 'true' && '-X' || '' }}
-        
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "Test execution completed"
+          # Check if surefire reports exist and display summary
+          if [ -d "target/surefire-reports" ]; then
+            echo "Test reports available at target/surefire-reports"
+            find target/surefire-reports -name "*.txt" -exec cat {} \; | grep "Tests run:"
+          else 
+            echo "No test reports found"
+          fi
+      
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+
+  # STAGE 3: Package Build
+  build:
+    needs: unit-test
+    name: Build Package
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-
+
       - name: Build JAR file
         run: mvn package -DskipTests
         
@@ -72,14 +131,9 @@ jobs:
             echo "No main application JAR found in target directory."
           fi
       
-      - name: Test Summary
-        if: always()
-        run: |
-          echo "Test execution completed"
-          # Check if surefire reports exist and display summary
-          if [ -d "target/surefire-reports" ]; then
-            echo "Test reports available at target/surefire-reports"
-            find target/surefire-reports -name "*.txt" -exec cat {} \; | grep "Tests run:"
-          else 
-            echo "No test reports found"
-          fi
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: application-jar
+          path: target/*.jar
+          if-no-files-found: error

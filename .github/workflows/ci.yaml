@@ -17,10 +17,13 @@ jobs:
   build-and-publish:
     name: Build and Publish Docker Image
     runs-on: self-hosted # Ensure your self-hosted runner is available and has this label
-    env:
-      FULL_IMAGE_NAME: "${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
 
     steps:
+      - name: Set Full Image Name
+        run: |
+          echo "FULL_IMAGE_NAME=${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" >> $GITHUB_ENV
+        shell: bash
+
       - name: Checkout Code
         uses: actions/checkout@v3
 

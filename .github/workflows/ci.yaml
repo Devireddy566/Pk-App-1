@@ -1,4 +1,4 @@
-name: CI Pipeline(DEV)
+name: CI PIPELINE (DEV)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Updated from v2 to v3
+        uses: actions/checkout@v4  # Updated from v3 to v4
       
       - name: Run GitLeaks Scan
         uses: gitleaks/gitleaks-action@v2
@@ -30,10 +30,10 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Updated from v2 to v3
+        uses: actions/checkout@v4  # Updated from v3 to v4
       
       - name: Set up JDK 17
-        uses: actions/setup-java@v3  # Updated from v2 to v3
+        uses: actions/setup-java@v4  # Updated from v3 to v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -43,7 +43,7 @@ jobs:
       
       # We need to make the build artifacts available for the next jobs
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3  # Updated from v2 to v3
+        uses: actions/upload-artifact@v4  # Updated from v3 to v4
         with:
           name: app-artifacts
           path: target/*.jar
@@ -55,10 +55,10 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Updated from v2 to v3
+        uses: actions/checkout@v4  # Updated from v3 to v4
       
       - name: Download build artifacts
-        uses: actions/download-artifact@v3  # Updated from v2 to v3
+        uses: actions/download-artifact@v4  # Updated from v3 to v4
         with:
           name: app-artifacts
           path: target

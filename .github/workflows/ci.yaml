@@ -55,10 +55,10 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4  # Updated from v3 to v4
-      
+        uses: actions/checkout@v4
+
       - name: Download build artifacts
-        uses: actions/download-artifact@v4  # Updated from v3 to v4
+        uses: actions/download-artifact@v4
         with:
           name: app-artifacts
           path: target
@@ -74,6 +74,27 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: |
           gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+      
+      # Push JAR files to GCR as artifacts
+      - name: Push JAR to Artifact Registry
+        run: |
+          echo "Uploading JAR files to Artifact Registry..."
+          # Create directory for storing JAR files
+          mkdir -p jar-artifacts
+          cp target/*.jar jar-artifacts/
+          
+          # Upload JAR files to GCR
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          JAR_PREFIX="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/jars"
+          
+          for jarfile in jar-artifacts/*.jar; do
+            JARNAME=$(basename "$jarfile")
+            echo "Uploading $JARNAME to Artifact Registry..."
+            gcloud artifacts jars upload "$JAR_PREFIX/$JARNAME" \
+              --source="$jarfile" \
+              --location=us-central1 \
+              --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to upload JAR"
+          done
       
       - name: Build Docker image
         env:
@@ -110,3 +131,67 @@ jobs:
           docker pull ${IMAGE_NAME}:${IMAGE_TAG} || echo "Image not found locally, will be built and pushed"
           echo "Pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
           docker push ${IMAGE_NAME}:${IMAGE_TAG}
+  
+  # STAGE 5: Cleanup
+  cleanup:
+    needs: deploy
+    name: Cleanup Resources
+    runs-on: self-hosted
+    if: always()  # Run even if previous steps fail
+    steps:
+      - name: Clean Docker images
+        run: |
+          echo "Cleaning up Docker resources..."
+          # Get the image name from previous steps
+          IMAGE_NAME="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/app-1:${{ github.event.inputs.version }}"
+          
+          # Remove the Docker image
+          echo "Removing Docker image: ${IMAGE_NAME}"
+          docker rmi ${IMAGE_NAME} || echo "Image ${IMAGE_NAME} not found or already removed"
+          
+          # Clean dangling images
+          echo "Cleaning dangling images..."
+          docker image prune -f
+          
+          # Clean build cache
+          echo "Cleaning build cache..."
+          docker builder prune -f --filter until=24h
+          
+          echo "Cleanup completed"
+      
+      - name: Clean Maven cache
+        run: |
+          echo "Cleaning Maven cache..."
+          
+          # Display Maven cache size before cleanup
+          echo "Maven cache size before cleanup:"
+          du -sh ~/.m2/ || echo "Maven cache not found"
+          
+          # Clean Maven repositories older than 7 days
+          find ~/.m2/repository -type d -name "*SNAPSHOT*" -mtime +7 -exec rm -rf {} \; 2>/dev/null || echo "No old SNAPSHOT artifacts to remove"
+          
+          # Remove corrupted and incomplete downloads
+          find ~/.m2/repository -name "*.lastUpdated" -exec rm -rf {} \; 2>/dev/null || echo "No lastUpdated files to remove"
+          find ~/.m2/repository -name "*_remote*" -exec rm -rf {} \; 2>/dev/null || echo "No remote temporary files to remove"
+          
+          # Optional: Purge entire Maven cache (uncomment if needed)
+          # echo "Purging entire Maven cache..."
+          # rm -rf ~/.m2/repository/*
+          
+          # Display Maven cache size after cleanup
+          echo "Maven cache size after cleanup:"
+          du -sh ~/.m2/ || echo "Maven cache not found"
+          
+          echo "Maven cache cleanup completed"
+      
+      - name: Runner workspace cleanup
+        run: |
+          echo "Cleaning runner workspace..."
+          # Remove temporary files
+          rm -rf target/ jar-artifacts/
+          
+          # Display disk space after cleanup
+          echo "Disk space after cleanup:"
+          df -h
+          
+          echo "Runner workspace cleanup completed"

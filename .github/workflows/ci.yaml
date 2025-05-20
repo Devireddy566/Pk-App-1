@@ -1,0 +1,59 @@
+name: CI/CD with Dockerized Stages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image Version Tag'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  IMAGE_NAME: demo-app
+  IMAGE_TAG: ${{ github.event.inputs.version }}
+  FULL_IMAGE: ${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+jobs:
+  build-and-deploy:
+    runs-on: [self-hosted, r1]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 1. GitLeaks scan
+      - name: Run GitLeaks inside Docker
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/repo \
+            zricethezav/gitleaks:latest detect -s /repo
+
+      # 2. Maven build
+      - name: Run Maven Build inside Docker
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/app \
+            -w /app \
+            maven:3.9.6-eclipse-temurin-17 \
+            mvn clean install
+
+      # 3. Docker build
+      - name: Build Docker Image
+        run: |
+          docker build -t $FULL_IMAGE .
+
+      # 4. Authenticate to GCP & Push to GCR
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
+
+      - name: Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker ${{ secrets.GCR_REGISTRY }}
+
+      - name: Push Docker Image to GCR
+        run: |
+          docker push $FULL_IMAGE
+

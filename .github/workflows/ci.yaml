@@ -12,11 +12,12 @@ env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   IMAGE_NAME: PK-APP-1
   IMAGE_TAG: ${{ github.event.inputs.version }}
-  FULL_IMAGE: ${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
 jobs:
   build-and-deploy:
     runs-on: [self-hosted, r1]
+    env:
+      FULL_IMAGE: ${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
     steps:
       - name: Checkout code

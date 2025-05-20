@@ -1,7 +1,16 @@
 name: UNIT-TESTING
-description: Run unit tests for the project using Maven
+
 on:
   workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Enable debugging logs'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   unit-test:
@@ -10,6 +19,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Verify runner environment
+        run: |
+          echo "Running on self-hosted runner"
+          echo "Java version:"
+          java -version
+          echo "Maven version:"
+          mvn --version
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -26,4 +43,16 @@ jobs:
             ${{ runner.os }}-m2-
 
       - name: Run Tests
-        run: mvn test -B
+        run: mvn test -B ${{ github.event.inputs.debug == 'true' && '-X' || '' }}
+        
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "Test execution completed"
+          # Check if surefire reports exist and display summary
+          if [ -d "target/surefire-reports" ]; then
+            echo "Test reports available at target/surefire-reports"
+            find target/surefire-reports -name "*.txt" -exec cat {} \; | grep "Tests run:"
+          else 
+            echo "No test reports found"
+          fi

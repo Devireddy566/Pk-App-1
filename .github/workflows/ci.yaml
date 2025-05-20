@@ -1,4 +1,4 @@
-name: CI PIPELINE (DEV)
+name: CI PIPELINE-(DEV)
 
 on:
   workflow_dispatch:

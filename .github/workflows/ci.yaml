@@ -31,15 +31,12 @@ jobs:
           
       - name: Set up Cloud SDK
         uses: 'google-github-actions/setup-gcloud@v1'
-        
-      - name: Verify GCP Permissions
+      
+      - name: Verify Service Account
         run: |
-          echo "Verifying service account permissions..."
-          # Print the email of the active service account
+          echo "Verifying active service account..."
           gcloud auth list
-          # Check IAM permissions on the repository
-          gcloud projects get-iam-policy ${{ secrets.GCP_PROJECT_ID }} --format=json | grep artifactregistry
-        
+          
       - name: Configure Docker
         run: |
           # Print registry for debugging
@@ -49,8 +46,8 @@ jobs:
           
       - name: Build and Push Docker image
         env:
-          # Using Artifact Registry format: LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY/IMAGE
-          IMAGE_NAME: "us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-app-1/app"
+          # Update repository name from pk-app-1 to pk-docker-repo-dev
+          IMAGE_NAME: "us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/app"
           IMAGE_TAG: ${{ github.event.inputs.version }}
         run: |
           echo "Building and pushing: ${IMAGE_NAME}:${IMAGE_TAG}"

@@ -10,7 +10,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  IMAGE_NAME: demo-app
+  IMAGE_NAME: PK-APP-1
   IMAGE_TAG: ${{ github.event.inputs.version }}
   FULL_IMAGE: ${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
@@ -21,6 +21,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Verify Docker access
+        run: |
+          echo "Checking Docker version and permissions..."
+          docker version
+          docker info
 
       # 1. GitLeaks scan
       - name: Run GitLeaks inside Docker

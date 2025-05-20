@@ -45,6 +45,33 @@ jobs:
       - name: Run Tests
         run: mvn test -B ${{ github.event.inputs.debug == 'true' && '-X' || '' }}
         
+      - name: Build JAR file
+        run: mvn package -DskipTests
+        
+      - name: Display JAR file information
+        run: |
+          echo "==== JAR FILE INFORMATION ===="
+          # List all JAR files in the target directory
+          echo "Searching for JAR files in target directory..."
+          find target -name "*.jar" -type f | while read jarfile; do
+            echo "Found JAR file: $jarfile"
+            echo "File size: $(du -h "$jarfile" | cut -f1)"
+            echo "Created at: $(stat -c %y "$jarfile")"
+            echo "JAR contents summary: $(jar -tf "$jarfile" | wc -l) files"
+            echo "---------------------------------"
+          done
+          
+          # Highlight the main application JAR
+          MAIN_JAR=$(find target -maxdepth 1 -name "*.jar" -not -name "*sources*" -not -name "*javadoc*" -not -name "*tests*" -type f | head -n 1)
+          if [ -n "$MAIN_JAR" ]; then
+            echo "MAIN APPLICATION JAR: $MAIN_JAR"
+            echo "This is the primary executable JAR file generated from your build."
+            echo "You can run it using: java -jar $MAIN_JAR"
+            echo "This JAR file will be used in the Docker image for deployment."
+          else
+            echo "No main application JAR found in target directory."
+          fi
+      
       - name: Test Summary
         if: always()
         run: |

@@ -32,6 +32,14 @@ jobs:
       - name: Set up Cloud SDK
         uses: 'google-github-actions/setup-gcloud@v1'
         
+      - name: Verify GCP Permissions
+        run: |
+          echo "Verifying service account permissions..."
+          # Print the email of the active service account
+          gcloud auth list
+          # Check IAM permissions on the repository
+          gcloud projects get-iam-policy ${{ secrets.GCP_PROJECT_ID }} --format=json | grep artifactregistry
+        
       - name: Configure Docker
         run: |
           # Print registry for debugging

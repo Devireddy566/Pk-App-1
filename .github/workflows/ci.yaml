@@ -1,4 +1,4 @@
-name: CI Pipeline (Manual)
+name: CI Pipeline(DEV)
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
   # STAGE 1: Security Scanning with GitLeaks
   security-scan:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -27,7 +27,7 @@ jobs:
   build:
     needs: security-scan
     name: Maven Build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -60,7 +60,7 @@ jobs:
   docker-build:
     needs: build
     name: Docker Build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -95,7 +95,7 @@ jobs:
   deploy:
     needs: docker-build
     name: Push to Registry
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Configure Google Cloud Auth
         uses: 'google-github-actions/auth@v1'

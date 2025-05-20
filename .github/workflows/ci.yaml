@@ -1,80 +1,103 @@
-name: CI/CD with Dockerized Stages
+name: CI/CD Pipeline for Dockerized Application
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Image Version Tag'
+        description: 'Image Version Tag (e.g., v1.0.0)'
         required: true
         default: 'v1.0.0'
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  IMAGE_NAME: pk-app-1 # Changed to lowercase
+  IMAGE_NAME: pk-app-1 # Standardized to lowercase
   IMAGE_TAG: ${{ github.event.inputs.version }}
 
 jobs:
-  build-and-deploy:
-    runs-on: self-hosted # Runner label for your self-hosted runner
+  build-and-publish:
+    name: Build and Publish Docker Image
+    runs-on: self-hosted # Ensure your self-hosted runner is available and has this label
     env:
-      FULL_IMAGE: "${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" # Added quotes
+      FULL_IMAGE_NAME: "${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Verify Docker access
+      - name: Verify Docker Access
         run: |
-          echo "Checking Docker version and permissions..."
+          echo "Verifying Docker client and daemon access..."
           docker version
           docker info
+        shell: bash
 
-      # 1. GitLeaks scan
-      - name: Run GitLeaks inside Docker
+      # Stage 1: GitLeaks Scan
+      - name: Run GitLeaks Scan
         run: |
+          echo "Scanning repository for secrets with GitLeaks..."
           docker run --rm \
-            -v ${{ github.workspace }}:/repo \
-            zricethezav/gitleaks:latest detect -s /repo
+            -v "${{ github.workspace }}":/repo \
+            zricethezav/gitleaks:latest detect --source /repo -v
+        shell: bash
 
-      - name: Cache Maven packages
+      # Stage 2: Maven Build
+      - name: Cache Maven Packages
         uses: actions/cache@v3
         with:
-          path: ~/.m2 # Changed from ~/.m2/repository
+          path: ~/.m2
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # 2. Maven build
-      - name: Run Maven Build inside Docker
+      - name: Run Maven Build
         run: |
+          echo "Building Java application with Maven..."
+          # The JAR file will be created in /app/target/ inside this container.
+          # Your Dockerfile should copy it from there (e.g., COPY target/*.jar app.jar).
           docker run --rm \
-            -v ${{ github.workspace }}:/app \
-            -v ${{ env.HOME }}/.m2:/root/.m2 \ # Mount cached Maven repository
+            -v "${{ github.workspace }}":/app \
+            -v "${{ env.HOME }}/.m2":/root/.m2 \
             -w /app \
             maven:3.9.6-eclipse-temurin-17 \
-            mvn clean install
+            mvn clean install -DskipTests
+          echo "Maven build complete. JAR files are in ${{ github.workspace }}/target/"
+        shell: bash
 
-      # 3. Docker build
+      # Stage 3: Docker Image Build
       - name: Build Docker Image
         run: |
-          docker build -t $FULL_IMAGE .
+          echo "Building Docker image: ${{ env.FULL_IMAGE_NAME }}"
+          docker build -t "${{ env.FULL_IMAGE_NAME }}" .
+        shell: bash
 
-      # 4. Authenticate to GCP & Push to GCR
+      # Stage 4: Push Docker Image to GCR
       - name: Verify gcloud CLI
         run: |
           echo "Checking gcloud CLI version..."
           gcloud --version
+        shell: bash
 
-      - name: Auth to Google Cloud
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
 
       - name: Configure Docker for GCR
         run: |
-          gcloud auth configure-docker ${{ secrets.GCR_REGISTRY }}
+          echo "Configuring Docker to authenticate with GCR: ${{ secrets.GCR_REGISTRY }}"
+          gcloud auth configure-docker ${{ secrets.GCR_REGISTRY }} --quiet
+        shell: bash
 
       - name: Push Docker Image to GCR
         run: |
-          docker push $FULL_IMAGE
+          echo "Pushing Docker image to GCR: ${{ env.FULL_IMAGE_NAME }}"
+          docker push "${{ env.FULL_IMAGE_NAME }}"
+        shell: bash
+
+      - name: Clean up Docker images (optional)
+        if: always() # Run this step even if previous steps fail
+        run: |
+          echo "Cleaning up local Docker image: ${{ env.FULL_IMAGE_NAME }}"
+          docker rmi "${{ env.FULL_IMAGE_NAME }}" || echo "Image not found or already removed."
+        shell: bash
 

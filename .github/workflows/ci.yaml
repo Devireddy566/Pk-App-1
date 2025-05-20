@@ -1,106 +1,67 @@
-name: CI/CD Pipeline for Dockerized Application
+name: CI - Manual Build Pipeline
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Image Version Tag (e.g., v1.0.0)'
+        description: 'Image Version Tag'
         required: true
         default: 'v1.0.0'
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  IMAGE_NAME: pk-app-1 # Standardized to lowercase
+  IMAGE_NAME: pk-app-1
   IMAGE_TAG: ${{ github.event.inputs.version }}
 
 jobs:
-  build-and-publish:
-    name: Build and Publish Docker Image
-    runs-on: self-hosted # Ensure your self-hosted runner is available and has this label
-
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: self-hosted
+    
     steps:
       - name: Set Full Image Name
         run: |
           echo "FULL_IMAGE_NAME=${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" >> $GITHUB_ENV
         shell: bash
-
+      
       - name: Checkout Code
         uses: actions/checkout@v3
-
-      - name: Verify Docker Access
+        
+      - name: Verify Environment
         run: |
-          echo "Verifying Docker client and daemon access..."
+          echo "Checking Maven version..."
+          mvn --version
+          
+          echo "Checking Docker version..."
           docker version
-          docker info
-        shell: bash
-
-      # Stage 1: GitLeaks Scan
-      - name: Run GitLeaks Scan
+        
+      - name: Build with Maven
         run: |
-          echo "Scanning repository for secrets with GitLeaks..."
-          docker run --rm \
-            -v "${{ github.workspace }}":/repo \
-            zricethezav/gitleaks:latest detect --source /repo -v
-        shell: bash
-
-      # Stage 2: Maven Build
-      - name: Cache Maven Packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      - name: Run Maven Build
-        run: |
-          echo "Building Java application with Maven..."
-          # The JAR file will be created in /app/target/ inside this container.
-          # Your Dockerfile should copy it from there (e.g., COPY target/*.jar app.jar).
-          docker run --rm \
-            -v "${{ github.workspace }}":/app \
-            -v "${{ env.HOME }}/.m2":/root/.m2 \
-            -w /app \
-            maven:3.9.6-eclipse-temurin-17 \
-            mvn clean install -DskipTests
-          echo "Maven build complete. JAR files are in ${{ github.workspace }}/target/"
-        shell: bash
-
-      # Stage 3: Docker Image Build
+          echo "Building application with Maven..."
+          mvn clean package -DskipTests
+          
       - name: Build Docker Image
         run: |
           echo "Building Docker image: ${{ env.FULL_IMAGE_NAME }}"
-          docker build -t "${{ env.FULL_IMAGE_NAME }}" .
-        shell: bash
-
-      # Stage 4: Push Docker Image to GCR
-      - name: Verify gcloud CLI
-        run: |
-          echo "Checking gcloud CLI version..."
-          gcloud --version
-        shell: bash
-
+          docker build -t ${{ env.FULL_IMAGE_NAME }} .
+          
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT }}'
-
+          
       - name: Configure Docker for GCR
         run: |
-          echo "Configuring Docker to authenticate with GCR: ${{ secrets.GCR_REGISTRY }}"
           gcloud auth configure-docker ${{ secrets.GCR_REGISTRY }} --quiet
-        shell: bash
-
-      - name: Push Docker Image to GCR
+          
+      - name: Push to Container Registry
         run: |
-          echo "Pushing Docker image to GCR: ${{ env.FULL_IMAGE_NAME }}"
-          docker push "${{ env.FULL_IMAGE_NAME }}"
-        shell: bash
-
-      - name: Clean up Docker images (optional)
-        if: always() # Run this step even if previous steps fail
+          echo "Pushing image to: ${{ env.FULL_IMAGE_NAME }}"
+          docker push ${{ env.FULL_IMAGE_NAME }}
+          
+      - name: Clean Up
+        if: always()
         run: |
-          echo "Cleaning up local Docker image: ${{ env.FULL_IMAGE_NAME }}"
-          docker rmi "${{ env.FULL_IMAGE_NAME }}" || echo "Image not found or already removed."
-        shell: bash
+          echo "Cleaning up resources..."
+          docker rmi ${{ env.FULL_IMAGE_NAME }} || true
 

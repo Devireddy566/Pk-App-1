@@ -15,7 +15,9 @@ env:
 
 jobs:
   build-and-deploy:
-    runs-on: [self-hosted, r1]
+    runs-on: self-hosted # Changed from [self-hosted, r1] for troubleshooting.
+                         # Ensure your runner is active and has the 'self-hosted' label.
+                         # If 'r1' is a required label, ensure your runner has both 'self-hosted' AND 'r1'.
     env:
       FULL_IMAGE: ${{ secrets.GCR_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 

@@ -112,7 +112,7 @@ jobs:
           echo "Pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
           docker push ${IMAGE_NAME}:${IMAGE_TAG}
 
-  # STAGE 6: Update Helm chart repo with new image tag and push
+  # STAGE 6: Deployment
       - name: Update Helm chart with new image tag
         run: |
           # Clone the Helm chart repo

@@ -112,12 +112,12 @@ jobs:
           echo "Pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
           docker push ${IMAGE_NAME}:${IMAGE_TAG}
 
-  # STAGE 6:Update Helm chart repo with new image tag and push ---
+  # STAGE 6: Update Helm chart repo with new image tag and push
       - name: Update Helm chart with new image tag
         run: |
           # Clone the Helm chart repo
           git clone https://github.com/Devireddy566/Pk-Helm-Charts.git
-          cd "Pk-Helm-Charts/PK-APP-1  - Helm charts/my-helm-chart"
+          cd "PK-APP-1/Deployment.yaml"
           # Update the image tag in values.yaml (assumes YAML key is image.tag)
           sed -i "s/^\([ ]*tag:[ ]*\).*/\1'${IMAGE_TAG}'/" values.yaml
           git add values.yaml

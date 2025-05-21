@@ -133,7 +133,7 @@ jobs:
           echo "Pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
           docker push ${IMAGE_NAME}:${IMAGE_TAG}
 
-      # --- Update Helm chart repo with new image tag and push ---
+      # STAGE 6:Update Helm chart repo with new image tag and push ---
       - name: Update Helm chart with new image tag
         run: |
           # Clone the Helm chart repo
@@ -146,33 +146,30 @@ jobs:
           git push origin main
           echo "Helm chart updated with new image tag: ${IMAGE_TAG}"
 
-      
-  
-  # STAGE 5: Cleanup
+  # STAGE 7: Cleanup
   cleanup:
     needs: deploy
-    name: Cleanup Resources
+    name: Cleanup
     runs-on: self-hosted
-    if: always()  # Run even if previous steps fail
+    if: always()
     steps:
-      - name: Clean Docker images
+      - name: Clean Docker resources
         run: |
-          echo "Cleaning up Docker resources..."
-          # Get the image name from previous steps
+          echo "Cleaning Docker resources..."
+          # Remove specific image and unused images
           IMAGE_NAME="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/app-1:${{ github.event.inputs.version }}"
-          
-          # Remove the Docker image
-          echo "Removing Docker image: ${IMAGE_NAME}"
-          docker rmi ${IMAGE_NAME} || echo "Image ${IMAGE_NAME} not found or already removed"
-          
-          # Clean dangling images
-          echo "Cleaning dangling images..."
-          docker image prune -f
-          
-          # Clean build cache
-          echo "Cleaning build cache..."
-          docker builder prune -f --filter until=24h
-          
-          echo "Cleanup completed"
+          docker rmi ${IMAGE_NAME} || true
+          docker system prune -f
+
+      - name: Clean Maven cache
+        run: |
+          echo "Cleaning Maven cache..."
+          rm -rf ~/.m2/repository/* || true
+
+      - name: Clean workspace
+        run: |
+          echo "Cleaning workspace..."
+          rm -rf ./* ./.git
+          rm -rf /tmp/* || true
       
       

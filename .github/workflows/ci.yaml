@@ -51,7 +51,7 @@ jobs:
 
   # STAGE 4: Build Docker Image
   docker-build:
-    needs: [build, code-quality]  # Now depends on both build and code-quality
+    needs: build 
     name: Docker Build
     runs-on: self-hosted
     steps:
@@ -75,27 +75,6 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: |
           gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-      
-      # Push JAR files to GCR as artifacts
-      - name: Push JAR to Artifact Registry
-        run: |
-          echo "Uploading JAR files to Artifact Registry..."
-          # Create directory for storing JAR files
-          mkdir -p jar-artifacts
-          cp target/*.jar jar-artifacts/
-          
-          # Upload JAR files to GCR
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          JAR_PREFIX="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/jars"
-          
-          for jarfile in jar-artifacts/*.jar; do
-            JARNAME=$(basename "$jarfile")
-            echo "Uploading $JARNAME to Artifact Registry..."
-            gcloud artifacts jars upload "$JAR_PREFIX/$JARNAME" \
-              --source="$jarfile" \
-              --location=us-central1 \
-              --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to upload JAR"
-          done
       
       - name: Build Docker image
         env:

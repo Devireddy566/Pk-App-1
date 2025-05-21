@@ -48,9 +48,46 @@ jobs:
           name: app-artifacts
           path: target/*.jar
   
-  # STAGE 3: Build Docker Image
-  docker-build:
+  # STAGE 3: SonarQube Code Quality Scan
+  code-quality:
     needs: build
+    name: SonarQube Analysis
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: app-artifacts
+          path: target
+      
+      - name: SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.PK_SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          # Run SonarQube scan using Docker container
+          docker run --rm \
+            -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+            -e SONAR_LOGIN="${SONAR_TOKEN}" \
+            -v "$(pwd):/usr/src" \
+            sonarsource/sonar-scanner-cli:latest \
+            -Dsonar.projectKey=pk-app-1 \
+            -Dsonar.projectName="PK App 1" \
+            -Dsonar.java.binaries=target \
+            -Dsonar.sources=src \
+            -Dsonar.java.source=17 \
+            -Dsonar.sourceEncoding=UTF-8
+          
+          echo "SonarQube analysis completed"
+
+  # STAGE 4: Build Docker Image
+  docker-build:
+    needs: [build, code-quality]  # Now depends on both build and code-quality
     name: Docker Build
     runs-on: self-hosted
     steps:
@@ -104,7 +141,7 @@ jobs:
           echo "Building image: ${IMAGE_NAME}:${IMAGE_TAG}"
           docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
   
-  # STAGE 4: Push to Registry
+  # STAGE 5: Push to Registry
   deploy:
     needs: docker-build
     name: Push to Registry
@@ -159,39 +196,4 @@ jobs:
           
           echo "Cleanup completed"
       
-      - name: Clean Maven cache
-        run: |
-          echo "Cleaning Maven cache..."
-          
-          # Display Maven cache size before cleanup
-          echo "Maven cache size before cleanup:"
-          du -sh ~/.m2/ || echo "Maven cache not found"
-          
-          # Clean Maven repositories older than 7 days
-          find ~/.m2/repository -type d -name "*SNAPSHOT*" -mtime +7 -exec rm -rf {} \; 2>/dev/null || echo "No old SNAPSHOT artifacts to remove"
-          
-          # Remove corrupted and incomplete downloads
-          find ~/.m2/repository -name "*.lastUpdated" -exec rm -rf {} \; 2>/dev/null || echo "No lastUpdated files to remove"
-          find ~/.m2/repository -name "*_remote*" -exec rm -rf {} \; 2>/dev/null || echo "No remote temporary files to remove"
-          
-          # Optional: Purge entire Maven cache (uncomment if needed)
-          # echo "Purging entire Maven cache..."
-          # rm -rf ~/.m2/repository/*
-          
-          # Display Maven cache size after cleanup
-          echo "Maven cache size after cleanup:"
-          du -sh ~/.m2/ || echo "Maven cache not found"
-          
-          echo "Maven cache cleanup completed"
       
-      - name: Runner workspace cleanup
-        run: |
-          echo "Cleaning runner workspace..."
-          # Remove temporary files
-          rm -rf target/ jar-artifacts/
-          
-          # Display disk space after cleanup
-          echo "Disk space after cleanup:"
-          df -h
-          
-          echo "Runner workspace cleanup completed"

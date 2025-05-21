@@ -133,7 +133,7 @@ jobs:
           cd Pk-Helm-Charts/PK-APP-1
           
           # Update the image tag in Deployment.yaml
-          sed -i "s|image: app1:v-.*|image: app1:v-${IMAGE_TAG}|g" Deployment.yaml
+          sed -i "s|image: app1:v-3|image: app1:v-${IMAGE_TAG}|g" Deployment.yaml
           
           # Commit and push changes
           git add Deployment.yaml

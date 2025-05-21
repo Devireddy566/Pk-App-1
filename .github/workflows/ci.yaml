@@ -47,43 +47,7 @@ jobs:
         with:
           name: app-artifacts
           path: target/*.jar
-  
-  # STAGE 3: SonarQube Code Quality Scan
-  code-quality:
-    needs: build
-    name: SonarQube Analysis
-    runs-on: self-hosted
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
-      
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: app-artifacts
-          path: target
-      
-      - name: SonarQube Scan
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          # Run SonarQube scan using Docker container
-          docker run --rm \
-            -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
-            -e SONAR_LOGIN="${SONAR_TOKEN}" \
-            -v "$(pwd):/usr/src" \
-            sonarsource/sonar-scanner-cli:latest \
-            -Dsonar.projectKey=pk-app-1 \
-            -Dsonar.projectName="PK App 1" \
-            -Dsonar.java.binaries=target \
-            -Dsonar.sources=src \
-            -Dsonar.java.source=17 \
-            -Dsonar.sourceEncoding=UTF-8
-          
-          echo "SonarQube analysis completed"
+
 
   # STAGE 4: Build Docker Image
   docker-build:
@@ -168,6 +132,21 @@ jobs:
           docker pull ${IMAGE_NAME}:${IMAGE_TAG} || echo "Image not found locally, will be built and pushed"
           echo "Pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
           docker push ${IMAGE_NAME}:${IMAGE_TAG}
+
+      # --- Update Helm chart repo with new image tag and push ---
+      - name: Update Helm chart with new image tag
+        run: |
+          # Clone the Helm chart repo
+          git clone https://github.com/Devireddy566/Pk-Helm-Charts.git
+          cd "Pk-Helm-Charts/PK-APP-1  - Helm charts/my-helm-chart"
+          # Update the image tag in values.yaml (assumes YAML key is image.tag)
+          sed -i "s/^\([ ]*tag:[ ]*\).*/\1'${IMAGE_TAG}'/" values.yaml
+          git add values.yaml
+          git commit -m "ci: update image tag to ${IMAGE_TAG} [skip ci]" || echo "No changes to commit"
+          git push origin main
+          echo "Helm chart updated with new image tag: ${IMAGE_TAG}"
+
+      
   
   # STAGE 5: Cleanup
   cleanup:

@@ -113,17 +113,32 @@ jobs:
           docker push ${IMAGE_NAME}:${IMAGE_TAG}
 
   # STAGE 6: Deployment
-      - name: Update Helm chart with new image tag
+  update-deployment:
+    needs: deploy
+    name: Update Deployment
+    runs-on: self-hosted
+    steps:
+      - name: Configure Git
         run: |
-          # Clone the Helm chart repo
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Update Deployment Image
+        env:
+          IMAGE_TAG: "${{ github.event.inputs.version }}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Clone the repository
           git clone https://github.com/Devireddy566/Pk-Helm-Charts.git
-          cd "PK-APP-1/Deployment.yaml"
-          # Update the image tag in values.yaml (assumes YAML key is image.tag)
-          sed -i "s/^\([ ]*tag:[ ]*\).*/\1'${IMAGE_TAG}'/" values.yaml
-          git add values.yaml
-          git commit -m "ci: update image tag to ${IMAGE_TAG} [skip ci]" || echo "No changes to commit"
-          git push origin main
-          echo "Helm chart updated with new image tag: ${IMAGE_TAG}"
+          cd Pk-Helm-Charts/PK-APP-1
+          
+          # Update the image tag in Deployment.yaml
+          sed -i "s|image: app1:v-.*|image: app1:v-${IMAGE_TAG}|g" Deployment.yaml
+          
+          # Commit and push changes
+          git add Deployment.yaml
+          git commit -m "Update image tag to v-${IMAGE_TAG}" || echo "No changes to commit"
+          git push https://${GITHUB_TOKEN}@github.com/Devireddy566/Pk-Helm-Charts.git main
 
   # STAGE 7: Cleanup
   cleanup:

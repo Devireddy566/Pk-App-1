@@ -114,30 +114,28 @@ jobs:
 
   # STAGE 6: Deployment
   update-deployment:
+    needs: deploy
     name: Update Deployment
     runs-on: self-hosted
-
     steps:
       - name: Configure Git
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      - name: Clone Helm Charts Repo
+        run: |
+          git clone https://github.com/Devireddy566/Pk-Helm-Charts.git
+
       - name: Update Deployment Image
         env:
           IMAGE_TAG: "${{ github.event.inputs.version }}"
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git clone https://github.com/Devireddy566/Pk-Helm-Charts.git
           cd Pk-Helm-Charts/PK-APP-1
-
-          # Replace the image tag in Deployment.yaml
-          sed -i "s|image: .*|image: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/app-1:${IMAGE_TAG}|g" Deployment.yaml
-
-          # Verify update
+          sed -i "s|image: .*|image: us-central1-docker.pkg.dev/${GCP_PROJECT_ID}/pk-docker-repo-dev/app-1:${IMAGE_TAG}|g" Deployment.yaml
           grep "${IMAGE_TAG}" Deployment.yaml || (echo "Image tag update failed" && exit 1)
-
-          # Commit and push
           git add Deployment.yaml
           git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
           git push https://${GITHUB_TOKEN}@github.com/Devireddy566/Pk-Helm-Charts.git main

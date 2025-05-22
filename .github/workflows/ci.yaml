@@ -125,33 +125,26 @@ jobs:
         run: |
           git clone https://github.com/Devireddy566/Pk-Helm-Charts.git
           cd Pk-Helm-Charts/PK-APP-1
-
-          IMAGE_PATH="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/app-1:${IMAGE_TAG}"
-
-          # Replace the image line (regardless of current format)
-          sed -i "s|image:.*|image: ${IMAGE_PATH}|g" Deployment.yaml
-
-          # Debug output
-          echo "Updated Deployment.yaml:"
-          cat Deployment.yaml
-
-          grep "${IMAGE_TAG}" Deployment.yaml || (echo "Image tag update failed" && exit 1)
-
+          
+          NEW_IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/app-1:${IMAGE_TAG}"
+          
+          sed -i "s|image:.*|image: ${NEW_IMAGE}|g" Deployment.yaml
+          
           git add Deployment.yaml
-          git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes to commit"
+          git commit -m "Update image to ${IMAGE_TAG}"
           git push https://${GITHUB_TOKEN}@github.com/Devireddy566/Pk-Helm-Charts.git main
+        continue-on-error: false
 
   # STAGE 7: Cleanup
   cleanup:
-    needs: deploy
+    needs: update-deployment
     name: Cleanup
     runs-on: self-hosted
-    if: always()
+    if: ${{ always() && needs.update-deployment.result == 'success' }}
     steps:
       - name: Clean Docker resources
         run: |
           echo "Cleaning Docker resources..."
-          # Remove specific image and unused images
           IMAGE_NAME="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/pk-docker-repo-dev/app-1:${{ github.event.inputs.version }}"
           docker rmi ${IMAGE_NAME} || true
           docker system prune -f
